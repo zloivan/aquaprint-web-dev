@@ -1295,7 +1295,7 @@ function _emscripten_asm_const_id(code, a0) {
  return ASM_CONSTS[code](a0);
 }
 STATIC_BASE = GLOBAL_BASE;
-STATICTOP = STATIC_BASE + 5224992;
+STATICTOP = STATIC_BASE + 5251856;
 __ATINIT__.push({
  func: (function() {
   __GLOBAL__sub_I_AccessibilityScriptingClasses_cpp();
@@ -3369,26 +3369,12 @@ __ATINIT__.push({
   ___emscripten_environ_constructor();
  })
 });
-var STATIC_BUMP = 5224992;
+var STATIC_BUMP = 5251856;
 Module["STATIC_BASE"] = STATIC_BASE;
 Module["STATIC_BUMP"] = STATIC_BUMP;
 var tempDoublePtr = STATICTOP;
 STATICTOP += 16;
 assert(tempDoublePtr % 8 == 0);
-function _AddFocusListener() {
- document.addEventListener("visibilitychange", (function() {
-  if (document.visibilityState === "visible") {
-   console.log("Tap has focus");
-   gameInstance.SendMessage("YandexSdk", "OnTabFocusedReact");
-  } else {
-   console.log("Tap lost focus");
-   gameInstance.SendMessage("YandexSdk", "OnTabUnfocusedReact");
-  }
- }));
-}
-function _CheckLanguage() {
- gameInstance.SendMessage("YandexSdk", "LanguageResponce", ysdk.environment.i18n.lang);
-}
 function _JS_Cursor_SetImage(ptr, length) {
  var binary = "";
  for (var i = 0; i < length; i++) binary += String.fromCharCode(HEAPU8[ptr + i]);
@@ -3950,45 +3936,109 @@ function _JS_WebRequest_SetResponseHandler(request, arg, onresponse) {
 function _JS_WebRequest_SetTimeout(request, timeout) {
  wr.requestInstances[request].timeout = timeout;
 }
-function _ShowFullScreenAdv() {
- ysdk.adv.showFullscreenAdv({
-  callbacks: {
-   onOpen: (function() {
-    gameInstance.SendMessage("YandexSdk", "InterstitialWindowOpenedEvent");
-    console.log("Opened AD:");
-   }),
-   onClose: (function(wasShown) {
-    gameInstance.SendMessage("YandexSdk", "InterstitialWindowClosedEvent");
-    console.log("Closed AD:");
-   }),
-   onError: (function(error) {
-    gameInstance.SendMessage("YandexSdk", "InterstitialShowFailedEvent");
-    console.log("Error AD:", error);
-   })
-  }
- });
+function _UnityVKBridge_Alert(messagePtr) {
+ var message = UTF8ToString(messagePtr);
+ alert(message);
 }
-function _ShowRewardedAdv() {
- ysdk.adv.showRewardedVideo({
-  callbacks: {
-   onOpen: (function() {
-    gameInstance.SendMessage("YandexSdk", "RewardWindowOpenedEvent");
-    console.log("Opened Rewarded AD.");
-   }),
-   onRewarded: (function() {
-    gameInstance.SendMessage("YandexSdk", "RewardedAdEvent");
-    console.log("Rewarded!");
-   }),
-   onClose: (function() {
-    gameInstance.SendMessage("YandexSdk", "RewardWindowClosedEvent");
-    console.log("Video ad closed.");
-   }),
-   onError: (function(e) {
-    gameInstance.SendMessage("YandexSdk", "RewardedShowFailedEvent");
-    console.log("Error while open video ad:", e);
-   })
+function _UnityVKBridge_GetWindowLocationHref() {
+ return allocate(intArrayFromString(window.location.href), "i8", ALLOC_STACK);
+}
+function _UnityVKBridge_SendMessage(methodNamePtr, paramsPtr) {
+ var methodName = UTF8ToString(methodNamePtr);
+ var params = UTF8ToString(paramsPtr);
+ try {
+  if (enableLogging) {
+   console.log("Method name: ", methodName);
   }
- });
+  if (enableLogging) {
+   console.log("Params before parse: ", params);
+  }
+  var parsedParams = params ? JSON.parse(params) : {};
+  if (enableLogging) {
+   console.log("Params after parse: ", parsedParams);
+  }
+  if (typeof vkBridge !== "undefined") {
+   vkBridge.send(methodName, parsedParams).then((function(data) {
+    if (enableLogging) {
+     console.log("Got inside then: ", data);
+    }
+    var dataStr = JSON.stringify({
+     method: methodName,
+     data: data
+    });
+    if (enableLogging) {
+     console.log("Data after parse : ", dataStr);
+    }
+    gameInstance.SendMessage("VKMessageReceiver", "ReceivePromise", dataStr);
+    if (enableLogging) {
+     console.log("Send message to unity...");
+    }
+   })).catch((function(error) {
+    if (enableLogging) {
+     console.log("Got inside error: ", error);
+    }
+    var errorStr = JSON.stringify({
+     method: methodName,
+     error: error
+    });
+    console.log("Error after parse: ", errorStr);
+    gameInstance.SendMessage("VKMessageReceiver", "ReceiveError", errorStr);
+    if (enableLogging) {
+     console.log("Send message to unity...");
+    }
+   }));
+  } else {
+   console.error("vkBridge is not defined. Make sure vkBridge is loaded.");
+  }
+ } catch (e) {
+  console.error("JSON parse error:", e);
+ }
+}
+function _UnityVKBridge_SetLogging(value) {
+ enableLogging = value !== 0;
+ console.log("Logging enabled: " + enableLogging);
+}
+function _UnityVKBridge_SetupFocusHandlers() {
+ window.addEventListener("focus", (function() {
+  gameInstance.SendMessage("VKMessageReceiver", "OnFocus");
+ }));
+ window.addEventListener("blur", (function() {
+  gameInstance.SendMessage("VKMessageReceiver", "OnBlur");
+ }));
+ document.addEventListener("visibilitychange", (function() {
+  if (document.hidden) {
+   gameInstance.SendMessage("VKMessageReceiver", "OnBlur");
+  } else {
+   gameInstance.SendMessage("VKMessageReceiver", "OnFocus");
+  }
+ }));
+ if (typeof vkBridge !== "undefined") {
+  vkBridge.subscribe((function(event) {
+   if (event.detail.type === "VKWebAppViewHide") {
+    gameInstance.SendMessage("VKMessageReceiver", "OnBlur");
+   }
+  }));
+  vkBridge.subscribe((function(event) {
+   if (event.detail.type === "VKWebAppViewRestore") {
+    gameInstance.SendMessage("VKMessageReceiver", "OnFocus");
+   }
+  }));
+ } else {
+  console.error("vkBridge is not defined. Make sure vkBridge is loaded.");
+ }
+}
+function _UnityVKBridge_Subscribe() {
+ if (typeof vkBridge !== "undefined") {
+  vkBridge.subscribe((function(event) {
+   var eventStr = JSON.stringify(event);
+   if (enableLogging) {
+    console.log("SendMessage called... for ReceiveEvent");
+   }
+   gameInstance.SendMessage("VKMessageReceiver", "ReceiveEvent", eventStr);
+  }));
+ } else {
+  console.error("vkBridge is not defined. Make sure vkBridge is loaded.");
+ }
 }
 function ___atomic_compare_exchange_8(ptr, expected, desiredl, desiredh, weak, success_memmodel, failure_memmodel) {
  var pl = HEAP32[ptr >> 2];
@@ -22424,8 +22474,6 @@ Module.asmLibraryArg = {
  "invoke_vjiiiiiii": invoke_vjiiiiiii,
  "invoke_vjiiiiiiii": invoke_vjiiiiiiii,
  "invoke_vjji": invoke_vjji,
- "_AddFocusListener": _AddFocusListener,
- "_CheckLanguage": _CheckLanguage,
  "_JS_Cursor_SetImage": _JS_Cursor_SetImage,
  "_JS_Cursor_SetShow": _JS_Cursor_SetShow,
  "_JS_Eval_ClearInterval": _JS_Eval_ClearInterval,
@@ -22480,8 +22528,12 @@ Module.asmLibraryArg = {
  "_JS_WebRequest_SetRequestHeader": _JS_WebRequest_SetRequestHeader,
  "_JS_WebRequest_SetResponseHandler": _JS_WebRequest_SetResponseHandler,
  "_JS_WebRequest_SetTimeout": _JS_WebRequest_SetTimeout,
- "_ShowFullScreenAdv": _ShowFullScreenAdv,
- "_ShowRewardedAdv": _ShowRewardedAdv,
+ "_UnityVKBridge_Alert": _UnityVKBridge_Alert,
+ "_UnityVKBridge_GetWindowLocationHref": _UnityVKBridge_GetWindowLocationHref,
+ "_UnityVKBridge_SendMessage": _UnityVKBridge_SendMessage,
+ "_UnityVKBridge_SetLogging": _UnityVKBridge_SetLogging,
+ "_UnityVKBridge_SetupFocusHandlers": _UnityVKBridge_SetupFocusHandlers,
+ "_UnityVKBridge_Subscribe": _UnityVKBridge_Subscribe,
  "__ZSt18uncaught_exceptionv": __ZSt18uncaught_exceptionv,
  "___atomic_compare_exchange_8": ___atomic_compare_exchange_8,
  "___atomic_fetch_add_8": ___atomic_fetch_add_8,
